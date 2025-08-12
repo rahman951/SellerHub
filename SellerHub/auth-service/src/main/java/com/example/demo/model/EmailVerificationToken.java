@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "email_verification_tokens")
+@Table(name="email_verification_tokens")
 @Data
 public class EmailVerificationToken {
     @Id
@@ -15,8 +15,10 @@ public class EmailVerificationToken {
     private Long id;
 
     private String token;
+
     @ManyToOne
     private User user;
+
     private LocalDateTime expiryDate;
 
 }
