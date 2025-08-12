@@ -8,9 +8,7 @@ import java.util.Optional;
 
 @Service
 public interface UserService {
-
-
-
     void add(User user);
+    boolean confirmEmail(String token);
 
 }
