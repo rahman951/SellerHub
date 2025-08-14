@@ -1,53 +1,56 @@
 package com.example.demo.model;
 
 import jakarta.persistence.*;
-import lombok.*;
-import org.hibernate.proxy.HibernateProxy;
 import org.springframework.security.core.GrantedAuthority;
 
-import java.util.Objects;
-
 @Entity
-@Table(name = "roles", uniqueConstraints = @UniqueConstraint(columnNames = "name"))
-@Getter
-@Setter
-@ToString
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "roles", uniqueConstraints = @UniqueConstraint(name = "uk_role_name", columnNames = "name"))
 public class Role implements GrantedAuthority {
-
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE) // для Postgres
-    @Column(nullable = false)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
-    private String name; // например: "ADMIN", "SELLER"
+    @Column(nullable = false, length = 64)
+    private String name;
 
-    @Override
+    public Role() {}
+
+    public Role(String name) {
+        this.name = name;
+    }
+
     public String getAuthority() {
-        // Spring Security ожидает "ROLE_XXX"
-        return "ROLE_" + name;
+        return name;
     }
 
-    @Override
-    public final boolean equals(Object o) {
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy
-                ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass()
-                : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy
-                ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass()
-                : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        Role role = (Role) o;
-        return getId() != null && Objects.equals(getId(), role.getId());
+        if (!(o instanceof Role role)) return false;
+        if (id == null || role.id == null) return false;
+        return id.equals(role.id);
     }
 
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy
-                ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode()
-                : getClass().hashCode();
+    public int hashCode() {
+        return 31;
+    }
+
+    public String toString() {
+        return "Role{id=%d, name='%s'}".formatted(id, name);
     }
 }

@@ -7,7 +7,6 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -16,18 +15,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import static org.springframework.security.config.http.SessionCreationPolicy.STATELESS;
 
 @Configuration
-@EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true) // новый вариант
+@EnableMethodSecurity(prePostEnabled = true) // Включаем поддержку аннотаций @PreAuthorize
 public class SecurityConfig {
 
     private final CustomUserDetailsService userDetailsService;
-    private final PasswordEncoder passwordEncoder;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     public SecurityConfig(CustomUserDetailsService userDetailsService,
-                          PasswordEncoder passwordEncoder, JwtAuthenticationFilter jwtAuthenticationFilter) {
+                          JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.userDetailsService = userDetailsService;
-        this.passwordEncoder = passwordEncoder;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -36,43 +32,40 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @SuppressWarnings("removal")
     @Bean
     public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
         return http.getSharedObject(AuthenticationManagerBuilder.class)
-
                 .userDetailsService(userDetailsService)
-                .passwordEncoder(passwordEncoder)
+                .passwordEncoder(passwordEncoder())
                 .and()
                 .build();
     }
 
-    @SuppressWarnings("removal")
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf().disable()
-                .authorizeHttpRequests(auth -> {
-                            try {
-                                auth
+        System.out.println("=== SecurityConfig: настраиваем правила доступа ===");
 
-                                        .requestMatchers("/login, /register, /confirm, /password-reset-request, /password-reset, /token, /refresh").permitAll()
-                                        .requestMatchers("/admin").hasRole("ADMIN")
-                                        .anyRequest().authenticated()
-                                        .and()
-                                        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                                        .sessionManagement().sessionCreationPolicy(STATELESS)
-                                        .and()
-                                        .formLogin().disable()
-                                        .httpBasic().disable()
+        http.csrf().disable()
+                .authorizeHttpRequests(auth -> auth
+                        // Публичные эндпоинты
+                        .requestMatchers(
+                                "/api/auth/register",
+                                "/api/auth/confirm",
+                                "/api/auth/login",
+                                "/api/auth/token/refresh",
+                                "/api/auth/password-reset-request",
+                                "/api/auth/password-reset"
+                        ).permitAll()
+                        // Защищённые эндпоинты
+                        .requestMatchers("/api/auth/secure/**").hasRole("SELLER")
+                        // Остальные требуют авторизации
+                        .anyRequest().authenticated()
+                )
+                .sessionManagement(sm -> sm.sessionCreationPolicy(STATELESS))
+                .formLogin().disable()
+                .httpBasic().disable()
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-
-                                ;
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        }
-                );
         return http.build();
     }
 }
