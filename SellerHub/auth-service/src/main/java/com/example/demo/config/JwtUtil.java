@@ -12,68 +12,101 @@ import org.springframework.stereotype.Component;
 
 import java.security.Key;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.Period;
+import java.time.ZoneOffset;
+import java.time.temporal.TemporalAmount;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class JwtUtil {
+    private final Key key;
+    private final TemporalAmount accessTtl;
+    private final TemporalAmount refreshTtl;
 
-    @Value("${jwt.secret.access}")
-    private String accessSecretBase64;
-
-
-    @Value("${jwt.expiration.refresh}")
-    private Duration refreshTtl;
-
-
-    @Value("${jwt.expiration.access}")
-    private Duration accessTtl;
-
-    private Key getSignInKey(String base64Secret) {
-
-        byte[] keyBytes = Decoders.BASE64.decode(base64Secret);
-        return Keys.hmacShaKeyFor(keyBytes);
+    public JwtUtil(@Value("${jwt.secret}") String secretBase64,
+                   @Value("${jwt.expiration.access}") String accessExp,
+                   @Value("${jwt.expiration.refresh}") String refreshExp) {
+        this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretBase64));
+        this.accessTtl = parseTemporal(accessExp);
+        this.refreshTtl = parseTemporal(refreshExp);
     }
 
-    public String generateAccessToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
-
-        List<String> roles = userDetails.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .toList();
-        claims.put("roles", roles);
-
-        Date issuedDate = new Date();
-
-
-        long ttlMillis = refreshTtl.toMillis();
-        Date expiresDate = new Date(issuedDate.getTime() + ttlMillis);
-
+    public String generateAccessToken(UserDetails principal) {
+        List<String> roles = principal.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+        Instant now = Instant.now();
+        Instant exp = plus(now, accessTtl);
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(userDetails.getUsername())
-                .setIssuedAt(issuedDate)
-                .setExpiration(expiresDate)
-                .signWith(getSignInKey(accessSecretBase64), SignatureAlgorithm.HS256)
+                .setSubject(principal.getUsername())
+                .addClaims(Map.of("roles", roles))
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(exp))
+                .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
 
-    private Claims getAllClaimsFromToken(String token) {
-        return Jwts.parser()
-                .setSigningKey(getSignInKey(accessSecretBase64))
+    public String generateRefreshToken(UserDetails principal) {
+        List<String> roles = principal.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
+        Instant now = Instant.now();
+        Instant exp = plus(now, refreshTtl);
+        return Jwts.builder()
+                .setSubject(principal.getUsername())
+                .addClaims(Map.of("roles", roles))
+                .setIssuedAt(Date.from(now))
+                .setExpiration(Date.from(exp))
+                .signWith(key, SignatureAlgorithm.HS512)
+                .compact();
+    }
+
+    public boolean isAccessTokenValid(String token) {
+        try {
+            Claims c = parse(token);
+            return c.getExpiration().after(new Date());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isRefreshTokenValid(String token) {
+        try {
+            Claims c = parse(token);
+            return c.getExpiration().after(new Date());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String usernameFromAccess(String token) {
+        return parse(token).getSubject();
+    }
+
+    public String usernameFromRefresh(String token) {
+        return parse(token).getSubject();
+    }
+
+    public List<String> rolesFromAccess(String token) {
+        Object v = parse(token).get("roles");
+        if (v instanceof List<?> list) return list.stream().map(String::valueOf).toList();
+        return List.of();
+    }
+
+    private Claims parse(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
 
-
-    public String getUsernameFromToken(String token) {
-        return getAllClaimsFromToken(token).getSubject();
+    private static TemporalAmount parseTemporal(String iso) {
+        if (iso.startsWith("P") && !iso.startsWith("PT")) return Period.parse(iso);
+        return Duration.parse(iso);
     }
 
-    public String getRoleFromToken(String token) {
-        return getAllClaimsFromToken(token).get("role").toString();
+    private static Instant plus(Instant start, TemporalAmount amount) {
+        if (amount instanceof Period p) return start.atZone(ZoneOffset.UTC).plus(p).toInstant();
+        return start.plus((Duration) amount);
     }
 }

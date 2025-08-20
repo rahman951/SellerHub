@@ -1,7 +1,8 @@
 package com.example.demo.service;
 
-import java.util.Map;
+import com.example.demo.dto.AuthResponse;
 
 public interface AuthService {
-    Map<String, String> authenticate(String email, String password);
+   AuthResponse login(String email, String password);
+   AuthResponse refresh(String refreshToken);
 }

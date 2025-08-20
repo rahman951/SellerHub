@@ -1,33 +1,66 @@
 package com.example.demo.controller;
 
-import com.example.demo.model.EmailVerificationToken;
-import com.example.demo.repository.UserRepository;
+import com.example.demo.dto.*;
+import com.example.demo.service.AuthService;
 import com.example.demo.service.UserService;
-import com.example.demo.service.UserServiceImpl;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
+import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
+
+@RestController
+@RequestMapping("/auth")
+@Validated
 public class AuthController {
-
+    private final AuthService auth;
     private final UserService userService;
 
-    public AuthController(UserService userService) {
+    public AuthController(AuthService auth, UserService userService) {
+        this.auth = auth;
         this.userService = userService;
     }
 
-
+    @PostMapping("/register")
+    public ResponseEntity<String> register(@Valid @RequestBody RegistrationRequest registration) {
+        userService.registerUser(registration.email(), registration.password());
+        return ResponseEntity.ok("Регистрация успешна. Проверьте email для подтверждения.");
+    }
     @GetMapping("/confirm")
-    public ResponseEntity<String> confirmEmail(@RequestParam String token) {
-        boolean success = userService.confirmEmail(token);
-
-        if (success) {
-            return ResponseEntity.ok("Email успешно подтверждён");
+    public ResponseEntity<String> confirm(@RequestParam("token") String token) {
+        boolean confirmed = userService.confirmEmail(token);
+        if (confirmed) {
+            return ResponseEntity.ok("Email успешно подтверждён!");
         } else {
-            return ResponseEntity.badRequest().body("Токен не найден или истёк");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("Ссылка недействительна или срок её действия истёк.");
         }
+    }
+
+
+    @PostMapping("/login")
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse tokens = auth.login(request.email(), request.password());
+        return ResponseEntity.ok(tokens);
+    }
+
+
+    @PostMapping("/token/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshToken request) {
+        AuthResponse tokens = auth.refresh(request.refreshToken());
+        return ResponseEntity.ok(tokens);
+    }
+
+    @PostMapping("/password-reset-request")
+    public ResponseEntity<String> requestPasswordReset(@Valid @RequestBody PasswordResetEmailRequest request) {
+        userService.initiatePasswordReset(request.email());
+        return ResponseEntity.ok("Если пользователь существует, на почту отправлены инструкции по сбросу пароля.");
+    }
+
+    @PostMapping("/password-reset")
+    public ResponseEntity<String> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        userService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok("Пароль успешно изменён.");
     }
 }

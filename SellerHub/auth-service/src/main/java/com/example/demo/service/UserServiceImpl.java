@@ -1,19 +1,17 @@
 package com.example.demo.service;
 
 import com.example.demo.model.EmailVerificationToken;
-import com.example.demo.model.Token;
+import com.example.demo.model.PasswordResetToken;
 import com.example.demo.model.User;
 import com.example.demo.repository.EmailVerificationTokenRepository;
+import com.example.demo.repository.PasswordResetTokenRepository;
 import com.example.demo.repository.RoleRepository;
-import com.example.demo.repository.TokenRepository;
 import com.example.demo.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -21,62 +19,97 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TokenRepository tokenRepository;
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final EmailService emailService;
     private final RoleRepository roleRepository;
-    private final Token token;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
 
-
-    public UserServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder, TokenRepository tokenRepository, EmailVerificationTokenRepository emailVerificationTokenRepository, EmailService emailService, RoleRepository roleRepository, Token token) {
+    public UserServiceImpl(UserRepository userRepository,
+                           PasswordEncoder passwordEncoder,
+                           EmailVerificationTokenRepository emailVerificationTokenRepository,
+                           EmailService emailService, RoleRepository roleRepository, PasswordResetTokenRepository passwordResetTokenRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
-        this.tokenRepository = tokenRepository;
         this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.emailService = emailService;
         this.roleRepository = roleRepository;
-        this.token = token;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
-
 
     @Override
     @Transactional
-    public void add(User user) {
-        User newUser = new User();
-        EmailVerificationToken emailVerificationToken = new EmailVerificationToken();
-
-        if (userRepository.existsByEmail(user.getEmail())) {
+    public void registerUser(String email,  String password) {
+        if (email == null || email.isEmpty()) {
+            throw new IllegalArgumentException("Email обязателен");
+        }
+        if (userRepository.findByEmail(email).isPresent()) {
             throw new IllegalArgumentException("Email уже занят");
         }
-        newUser.setEmail(user.getUsername());
-        newUser.setPassword(passwordEncoder.encode(user.getPassword()));
+
+        var defaultRole = roleRepository.findByName("SELLER")
+                .orElseThrow(() -> new IllegalStateException("Роль SELLER не найдена"));
+
+        User newUser = new User();
+        newUser.setEmail(email);
+        newUser.setPassword(passwordEncoder.encode(password));
         newUser.setEnabled(false);
-        newUser.setRoles(user.getRoles());
+        newUser.setRoles(java.util.Set.of(defaultRole));
         userRepository.save(newUser);
-        String tok = UUID.randomUUID().toString();
-        emailVerificationToken.setToken(tok);
-        emailVerificationToken.setExpiryDate(LocalDateTime.now().plusHours(24));
-        emailVerificationTokenRepository.save(emailVerificationToken);
-        emailService.sendVerificationEmail(newUser, tok);
+
+        emailVerificationTokenRepository.deleteByUser(newUser);
+
+        String token = java.util.UUID.randomUUID().toString();
+        EmailVerificationToken evt = new EmailVerificationToken();
+        evt.setToken(token);
+        evt.setUser(newUser);
+        evt.setExpiryDate(java.time.LocalDateTime.now().plusHours(1));
+        emailVerificationTokenRepository.save(evt);
+
+        emailService.sendVerificationEmail(newUser, token);
     }
 
     @Override
+    @Transactional
     public boolean confirmEmail(String token) {
         return emailVerificationTokenRepository.findByToken(token)
                 .filter(t -> LocalDateTime.now().isBefore(t.getExpiryDate()))
                 .map(validToken -> {
-                    // Активируем пользователя
                     User user = validToken.getUser();
                     user.setEnabled(true);
                     userRepository.save(user);
-
-                    // Удаляем токен
                     emailVerificationTokenRepository.delete(validToken);
-
-                    return true; // успех
+                    return true;
                 })
-                .orElse(false); // токен не найден или истёк
+                .orElse(false);
     }
 
+    @Override
+    @Transactional
+    public void initiatePasswordReset(String email) {
+        userRepository.findByEmail(email).ifPresent(user -> {
+            String token = UUID.randomUUID().toString();
 
+            PasswordResetToken prt = new PasswordResetToken();
+            prt.setToken(token);
+            prt.setUser(user);
+            prt.setExpiryDate(LocalDateTime.now().plusHours(1));
+            passwordResetTokenRepository.save(prt);
+
+            emailService.sendPasswordResetEmail(user, token);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        PasswordResetToken prt = passwordResetTokenRepository.findByToken(token)
+                .filter(t -> LocalDateTime.now().isBefore(t.getExpiryDate()))
+                .orElseThrow(() -> new IllegalArgumentException("Неверный или просроченный токен"));
+
+        User user = prt.getUser();
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        passwordResetTokenRepository.delete(prt);
+    }
 }
