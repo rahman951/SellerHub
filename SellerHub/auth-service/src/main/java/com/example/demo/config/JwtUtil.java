@@ -22,17 +22,14 @@ import java.util.Map;
 
 @Component
 public class JwtUtil {
-    private final Key accessKey;
-    private final Key refreshKey;
+    private final Key key;
     private final TemporalAmount accessTtl;
     private final TemporalAmount refreshTtl;
 
-    public JwtUtil(@Value("${jwt.secret.access}") String accessSecretBase64,
-                   @Value("${jwt.secret.refresh}") String refreshSecretBase64,
+    public JwtUtil(@Value("${jwt.secret}") String secretBase64,
                    @Value("${jwt.expiration.access}") String accessExp,
                    @Value("${jwt.expiration.refresh}") String refreshExp) {
-        this.accessKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(accessSecretBase64));
-        this.refreshKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(refreshSecretBase64));
+        this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretBase64));
         this.accessTtl = parseTemporal(accessExp);
         this.refreshTtl = parseTemporal(refreshExp);
     }
@@ -46,7 +43,7 @@ public class JwtUtil {
                 .addClaims(Map.of("roles", roles))
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
-                .signWith(accessKey, SignatureAlgorithm.HS256)
+                .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
 
@@ -59,13 +56,13 @@ public class JwtUtil {
                 .addClaims(Map.of("roles", roles))
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
-                .signWith(refreshKey, SignatureAlgorithm.HS256)
+                .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
 
     public boolean isAccessTokenValid(String token) {
         try {
-            Claims c = parse(token, accessKey);
+            Claims c = parse(token);
             return c.getExpiration().after(new Date());
         } catch (Exception e) {
             return false;
@@ -74,7 +71,7 @@ public class JwtUtil {
 
     public boolean isRefreshTokenValid(String token) {
         try {
-            Claims c = parse(token, refreshKey);
+            Claims c = parse(token);
             return c.getExpiration().after(new Date());
         } catch (Exception e) {
             return false;
@@ -82,21 +79,25 @@ public class JwtUtil {
     }
 
     public String usernameFromAccess(String token) {
-        return parse(token, accessKey).getSubject();
+        return parse(token).getSubject();
     }
 
     public String usernameFromRefresh(String token) {
-        return parse(token, refreshKey).getSubject();
+        return parse(token).getSubject();
     }
 
     public List<String> rolesFromAccess(String token) {
-        Object v = parse(token, accessKey).get("roles");
+        Object v = parse(token).get("roles");
         if (v instanceof List<?> list) return list.stream().map(String::valueOf).toList();
         return List.of();
     }
 
-    private Claims parse(String token, Key key) {
-        return Jwts.parser().setSigningKey(key).build().parseClaimsJws(token).getBody();
+    private Claims parse(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 
     private static TemporalAmount parseTemporal(String iso) {

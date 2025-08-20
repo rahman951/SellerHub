@@ -1,6 +1,5 @@
 package com.example.demo.service;
 
-import com.example.demo.controller.AuthController;
 import com.example.demo.dto.AuthResponse;
 
 public interface AuthService {

@@ -1,7 +1,5 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.PasswordResetRequest;
-import com.example.demo.dto.RegistrationRequest;
 import com.example.demo.model.EmailVerificationToken;
 import com.example.demo.model.PasswordResetToken;
 import com.example.demo.model.User;
@@ -9,7 +7,7 @@ import com.example.demo.repository.EmailVerificationTokenRepository;
 import com.example.demo.repository.PasswordResetTokenRepository;
 import com.example.demo.repository.RoleRepository;
 import com.example.demo.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -40,7 +38,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public RegistrationRequest registerUser(String email,  String password) {
+    public void registerUser(String email,  String password) {
         if (email == null || email.isEmpty()) {
             throw new IllegalArgumentException("Email обязателен");
         }
@@ -68,7 +66,6 @@ public class UserServiceImpl implements UserService {
         emailVerificationTokenRepository.save(evt);
 
         emailService.sendVerificationEmail(newUser, token);
-        return new RegistrationRequest(newUser.getEmail(), newUser.getPassword());
     }
 
     @Override

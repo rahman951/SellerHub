@@ -1,3 +1,5 @@
 package com.example.demo.dto;
 
-public record RefreshToken(String refreshToken) {}
+import jakarta.validation.constraints.NotBlank;
+
+public record RefreshToken(@NotBlank String refreshToken) {}

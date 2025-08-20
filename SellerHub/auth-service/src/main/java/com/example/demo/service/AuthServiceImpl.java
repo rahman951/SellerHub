@@ -6,7 +6,7 @@ import com.example.demo.model.Token;
 import com.example.demo.model.User;
 import com.example.demo.repository.TokenRepository;
 import com.example.demo.repository.UserRepository;
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;

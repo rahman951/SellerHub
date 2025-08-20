@@ -1,3 +1,6 @@
 package com.example.demo.dto;
 
-public record PasswordResetEmailRequest(String email) {}
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record PasswordResetEmailRequest(@Email @NotBlank String email) {}

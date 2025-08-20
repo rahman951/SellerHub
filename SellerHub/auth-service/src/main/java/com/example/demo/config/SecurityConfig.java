@@ -4,7 +4,7 @@ import com.example.demo.service.CustomUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -33,37 +33,23 @@ public class SecurityConfig {
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
-        return http.getSharedObject(AuthenticationManagerBuilder.class)
-                .userDetailsService(userDetailsService)
-                .passwordEncoder(passwordEncoder())
-                .and()
-                .build();
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         System.out.println("=== SecurityConfig: настраиваем правила доступа ===");
 
-        http.csrf().disable()
+        http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // Публичные эндпоинты
-                        .requestMatchers(
-                                "/api/auth/register",
-                                "/api/auth/confirm",
-                                "/api/auth/login",
-                                "/api/auth/token/refresh",
-                                "/api/auth/password-reset-request",
-                                "/api/auth/password-reset"
-                        ).permitAll()
-                        // Защищённые эндпоинты
-                        .requestMatchers("/api/auth/secure/**").hasRole("SELLER")
-                        // Остальные требуют авторизации
-                        .anyRequest().authenticated()
+                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+                        .anyRequest().denyAll()
                 )
                 .sessionManagement(sm -> sm.sessionCreationPolicy(STATELESS))
-                .formLogin().disable()
-                .httpBasic().disable()
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

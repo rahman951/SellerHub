@@ -36,13 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
         System.out.println("=== JWT FILTER START for path: " + path + " ===");
 
-        // Пропускаем проверку токена для публичных эндпоинтов
-        if (path.startsWith("/api/auth/login") ||
-                path.startsWith("/api/auth/register") ||
-                path.startsWith("/api/auth/confirm") ||
-                path.startsWith("/api/auth/token/refresh") ||
-                path.startsWith("/api/auth/password-reset-request") ||
-                path.startsWith("/api/auth/password-reset")) {
+        if (path.startsWith("/auth")) {
 
             System.out.println("Путь публичный, фильтр пропускает проверку токена");
             chain.doFilter(request, response);
