@@ -1,0 +1,34 @@
+# infrastructure/docker-compose.yml
+version: '3.8'
+services:
+  postgres-auth:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: auth_service
+      POSTGRES_PASSWORD: postgres
+
+  postgres-user:
+    image: postgres:15
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: user_service
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  consul:
+    image: consul:1.16
+    ports:
+      - "8500:8500"
+    command: agent -dev -ui -client=0.0.0.0
