@@ -1,6 +1,6 @@
 package com.sellerhub.auth.controller;
 
-import com.example.demo.dto.*;
+
 import com.sellerhub.auth.dto.*;
 import com.sellerhub.auth.service.AuthService;
 import com.sellerhub.auth.service.UserService;
